@@ -1,4 +1,19 @@
 # core/music/oemer_tie_reconstruction.py — 基于图像的延音线视觉重建工作流
+# [EXPERIMENTAL - ABANDONED]
+# 实验结论（2026-04）：此方案不可行，分支 exp/oemer-tie-reconstruction 已标记失败。
+#
+# 失败原因：
+#   1. homr 以整图为单位进行 OMR 识别，输出仅为 MusicXML 音符序列，
+#      不提供任何音符在原始像素坐标系中的定位信息（无 bbox / 质心输出）；
+#      无法从识别结果反推回图像中对应音符的像素位置。
+#   2. 尝试用形态学操作（二值化 + 水平投影 + 小节线检测）估算音符像素位置，
+#      误差率过高（拍摄图像光照不均、倾斜、低分辨率等因素均会导致定位偏差），
+#      无法可靠地截取包含目标音符的切片送入 oemer/CV 弧检测。
+#   3. 替代思路（利用 oemer SegNet notehead 通道精化坐标）也因 oemer 对手机
+#      拍摄图像的背景噪声过于敏感，音符头质心误检率无法接受。
+#
+# 结论：tie 重建仍使用 core/music/tie_reconstruction.py 的纯 MusicXML 启发式
+#       规则（相邻同音高音符推断），不依赖图像视觉验证。
 """
 使用 oemer 引擎（可选）或 CV 回退方法，对 homr 生成的 MusicXML 中的
 相邻同音高音符进行视觉验证，重建缺失的延音线（tie）。
