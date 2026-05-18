@@ -51,6 +51,15 @@ class FileSidebar(ft.Column):
             height=28,
         )
 
+        self._delete_checked_btn = ft.IconButton(
+            icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+            icon_size=18,
+            icon_color=Palette.ERROR,
+            tooltip='删除已勾选的文件',
+            on_click=self._on_batch_delete_click,
+            disabled=True,
+        )
+
         title_row = ft.Row(
             [
                 ft.Row(
@@ -62,6 +71,7 @@ class FileSidebar(ft.Column):
                 ),
                 ft.Row(
                     [
+                        self._delete_checked_btn,
                         ft.IconButton(
                             icon=ft.Icons.CREATE_NEW_FOLDER_ROUNDED,
                             icon_size=18,
@@ -222,6 +232,64 @@ class FileSidebar(ft.Column):
             self._select_all_btn.icon       = ft.Icons.INDETERMINATE_CHECK_BOX
             self._select_all_btn.icon_color = Palette.PRIMARY
 
+    def _update_delete_btn(self) -> None:
+        self._delete_checked_btn.disabled = len(self._state.checked_files) == 0
+        try:
+            self._delete_checked_btn.update()
+        except Exception:
+            pass
+
+    def _on_batch_delete_click(self, _e) -> None:
+        to_delete = list(self._state.checked_files)
+        if not to_delete:
+            return
+        input_dir = (app_base_dir() / 'Input').resolve()
+        in_input = [p for p in to_delete if p.resolve().parent == input_dir]
+        n = len(to_delete)
+        m = len(in_input)
+
+        if m > 0:
+            msg = (
+                f'将永久删除 {m} 个 Input 文件夹中的文件，另有 {n - m} 个仅从列表移除。'
+                if n > m else
+                f'将永久删除 {n} 个 Input 文件夹中的文件。'
+            )
+        else:
+            msg = f'将从列表移除 {n} 个文件（不删除磁盘文件）。'
+
+        def _do(_e) -> None:
+            self.page.pop_dialog()
+            deleted_set = set(to_delete)
+            for p in in_input:
+                try:
+                    p.resolve().unlink(missing_ok=True)
+                except Exception:
+                    pass
+            self._state.pinned_files = [f for f in self._state.pinned_files if f not in deleted_set]
+            self._state.checked_files -= deleted_set
+            if self._state.current_file in deleted_set:
+                self._state.current_file = self._state.pinned_files[0] if self._state.pinned_files else None
+            self._state.emit(Event.FILES_CHANGED, files=list(self._state.pinned_files))
+            self._update_delete_btn()
+
+        def _cancel(_e) -> None:
+            self.page.pop_dialog()
+
+        self.page.show_dialog(ft.AlertDialog(
+            modal=True,
+            title=ft.Text('批量删除文件', size=15, weight=ft.FontWeight.W_600),
+            content=ft.Text(msg, size=13, color=ft.Colors.ON_SURFACE),
+            actions=[
+                ft.TextButton('取消', on_click=_cancel),
+                ft.FilledButton(
+                    '删除',
+                    on_click=_do,
+                    style=ft.ButtonStyle(bgcolor=Palette.ERROR, color='#FFFFFF'),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        ))
+
     # ── 事件处理 ─────────────────────────────────────────────────────────────
 
     def _on_add_click(self, _e) -> None:
@@ -380,6 +448,7 @@ class FileSidebar(ft.Column):
                     self._update_select_all_icon()
                     self._file_list_col.update()
                     self._select_all_btn.update()
+                    self._update_delete_btn()
                 except Exception:
                     pass
             p.run_task(_do)  # type: ignore[attr-defined]
@@ -389,4 +458,5 @@ class FileSidebar(ft.Column):
                 self._make_file_row(fp) for fp in pinned
             ]
             self._update_select_all_icon()
+            self._update_delete_btn()
 
